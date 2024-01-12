@@ -1,36 +1,62 @@
-import streamlit as st
+from flask import Flask, render_template, request
+from datetime import date
+import datetime
 import requests
 
-# Get list of cryptocurrencies from CoinGecko API
-url = 'https://api.coingecko.com/api/v3/coins/list?per_page=100'
-response = requests.get(url).json()
-cryptocurrencies = response['data']
+app = Flask(__name__)
 
-# Define input fields for user selection
-initial_value = st.number_input('Initial Investment Value', min_value=1)
-target_coin = st.selectbox('Select Cryptocurrency', cryptocurrencies)
-target_date = st.date_input('Investment Date')
 
-# Calculate actual price and hypothetical returns
-coin_symbol = target_coin['symbol']
+def format_date_str(_str):
+    year = _str[0:4]
+    day = _str[8:]
+    month = _str[5:7]
 
-# Get actual price
-url = f'https://api.coingecko.com/api/v3/simple/price?ids={coin_symbol}&vs_currencies=usd'
-response = requests.get(url).json()
-actual_price = response[coin_symbol]['usd']
+    newstr = day + '-' + month + '-' + year
 
-# Get historical price on target date
-url = f'https://api.coingecko.com/api/v3/coins/{coin_symbol}/history?date={target_date}&localization=false'
-response = requests.get(url).json()
+    return newstr
 
-old_price = response['market_data']['current_price']['usd']
 
-amount = initial_value / old_price
-hypothetical_return = amount * actual_price
+@app.route("/")
+def index():
+    return render_template("index.html", result="See how your cryptocurrency investments would have grown over time")
 
-# Display results
-if st.button('Calculate Returns'):
-    st.subheader(f'Hypothetical Returns for Investing ${initial_value} in {target_coin} on {target_date}')
-    st.text(f'Current Price: ${actual_price}')
-    st.text(f'Investment Value: ${initial_value}')
-    st.text(f'Hypothetical Return: ${hypothetical_return}')
+
+@app.route("/calculate", methods=["POST"])
+def calculate():
+    investment_amount = float(request.form.get("investment-amount"))
+    cryptocurrency = request.form.get("cryptocurrency")
+    investment_date = request.form.get("investment-date")
+    investment_date = format_date_str(investment_date)
+
+    print(investment_date, investment_amount, cryptocurrency)
+
+    # get actual price
+    url = f'https://api.coingecko.com/api/v3/simple/price?ids={cryptocurrency}&vs_currencies=usd'
+    response = requests.get(url).json()
+
+    actual_price = response[cryptocurrency]['usd']
+
+    print(actual_price)
+
+    # get old price
+    url = f'https://api.coingecko.com/api/v3/coins/{cryptocurrency}/history?date={investment_date}&localization=false'
+    response = requests.get(url).json()
+
+    print(url)
+
+    old_price = response['market_data']['current_price']['usd']
+
+    # presenting result
+    amount = investment_amount / old_price
+    amount = amount * actual_price
+    print(amount)
+    amount = "{:,.2f}".format(amount)
+
+    result_text = f'If I invested ${investment_amount} in {cryptocurrency} in {investment_date}, now I would have ${amount}!'
+
+    return render_template('index.html', result=result_text)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
